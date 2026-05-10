@@ -1,0 +1,30 @@
+{
+  "name": "quickapps-build",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:android": "npx cap sync android && cd android && chmod +x gradlew && ./gradlew assembleRelease --no-daemon",
+    "build:android:debug": "npx cap sync android && cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon",
+    "eas-build-pre-install": "echo 'QuickApps EAS pre-install'",
+    "eas-build-on-success": "echo 'QuickApps build succeeded'"
+  },
+  "dependencies": {
+    "expo": "~52.0.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
+    "@capacitor/keyboard": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/browser": "^6.0.0",
+    "@capacitor/network": "^6.0.0",
+    "@capacitor/share": "^6.0.0",
+    "@capacitor/local-notifications": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@quickapps/bridge",
+  "version": "1.0.0",
+  "description": "QuickApps JS Bridge — Native Capacitor API for web apps wrapped by QuickApps",
+  "main": "dist/quickapps-bridge.umd.js",
+  "module": "dist/quickapps-bridge.esm.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["quickapps", "capacitor", "bridge", "native", "webview"],
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  }
+}

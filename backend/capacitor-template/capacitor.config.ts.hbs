@@ -1,0 +1,51 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: '{{bundleId}}',
+  appName: '{{appName}}',
+  webDir: 'www',
+
+  server: {
+    url: '{{url}}',
+    cleartext: true,
+    {{#if domainWhitelist}}
+    allowNavigation: [{{{domainWhitelistJson}}}],
+    {{/if}}
+  },
+
+  plugins: {
+    SplashScreen: {
+      launchAutoHide: true,
+      launchShowDuration: {{splashDuration}},
+      backgroundColor: '{{splashBgColor}}',
+      androidSplashResourceName: 'splash',
+      launchFadeOutDuration: {{fadeOutDuration}},
+      showSpinner: false,
+    },
+    StatusBar: {
+      style: '{{statusBarStyle}}',
+      {{#if statusBarColor}}
+      backgroundColor: '{{statusBarColor}}',
+      {{/if}}
+    },
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
+  },
+
+  android: {
+    buildOptions: {
+      keystorePath: undefined,
+    },
+    webContentsDebuggingEnabled: false,
+  },
+
+  ios: {
+    contentInset: 'always',
+    scheme: '{{customUrlScheme}}',
+    webContentsDebuggingEnabled: false,
+  },
+};
+
+export default config;

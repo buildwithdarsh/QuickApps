@@ -1,0 +1,453 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────
+
+enum OrgPlan {
+  free
+  starter
+  pro
+  premium
+
+  @@map("org_plan")
+}
+
+enum OrgStatus {
+  active
+  suspended
+  deleted
+
+  @@map("org_status")
+}
+
+enum UserRole {
+  owner
+  admin
+  member
+
+  @@map("user_role")
+}
+
+enum AuthProvider {
+  email
+  google
+
+  @@map("auth_provider")
+}
+
+enum AppStatus {
+  draft
+  configured
+  building
+  ready
+  suspended
+
+  @@map("app_status")
+}
+
+enum BuildStatus {
+  pending
+  queued
+  preparing
+  building
+  packaging
+  completed
+  failed
+  cancelled
+
+  @@map("build_status")
+}
+
+enum BuildQueue {
+  free
+  standard
+  priority
+  immediate
+
+  @@map("build_queue")
+}
+
+enum BuildPlatform {
+  android
+  ios
+  both
+
+  @@map("build_platform")
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+
+  @@map("payment_status")
+}
+
+enum PaymentType {
+  plan_purchase
+  addon_purchase
+  revision_credit
+  wallet_topup
+  agency_subscription
+
+  @@map("payment_type")
+}
+
+enum PaymentGateway {
+  razorpay
+  stripe
+  mint_wallet
+
+  @@map("payment_gateway")
+}
+
+enum AgencyPlan {
+  starter
+  pro
+  scale
+
+  @@map("agency_plan")
+}
+
+enum AgencyClientStatus {
+  invited
+  active
+  suspended
+  removed
+
+  @@map("agency_client_status")
+}
+
+// ─── Core Tables ────────────────────────────────────────────────────────
+
+model Organisation {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String    @db.VarChar(100)
+  slug          String    @unique @db.VarChar(60)
+  plan          OrgPlan   @default(free)
+  status        OrgStatus @default(active)
+  agencyId      String?   @map("agency_id") @db.Uuid
+  billingEmail  String?   @map("billing_email")
+  billingName   String?   @map("billing_name") @db.VarChar(200)
+  billingAddress String?  @map("billing_address") @db.Text
+  gstNumber     String?   @map("gst_number") @db.VarChar(15)
+  planExpiresAt DateTime? @map("plan_expires_at") @db.Timestamptz
+  metadata      Json?     @default("{}")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  agency         Agency?         @relation("AgencyOrg", fields: [agencyId], references: [id])
+  users          User[]
+  apps           App[]
+  builds         Build[]
+  addonPurchases AddonPurchase[]
+  payments       Payment[]
+  mintWallet     MintWallet?
+  agencyProfile  Agency?         @relation("OrgAgency")
+  agencyClients  AgencyClient[]  @relation("ClientOrg")
+
+  @@index([agencyId])
+  @@map("organisations")
+}
+
+model User {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId         String       @map("org_id") @db.Uuid
+  email         String       @db.VarChar(255)
+  passwordHash  String?      @map("password_hash")
+  name          String?      @db.VarChar(100)
+  role          UserRole     @default(member)
+  authProvider  AuthProvider @default(email) @map("auth_provider")
+  googleId      String?      @unique @map("google_id")
+  avatarUrl     String?      @map("avatar_url")
+  emailVerified Boolean      @default(false) @map("email_verified")
+  lastLoginAt   DateTime?    @map("last_login_at") @db.Timestamptz
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime?    @map("deleted_at") @db.Timestamptz
+
+  organisation  Organisation   @relation(fields: [orgId], references: [id])
+  refreshTokens RefreshToken[]
+
+  @@unique([email, orgId])
+  @@index([orgId])
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(512)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model EmailVerification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String    @db.VarChar(255)
+  code      String    @db.VarChar(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([email, code])
+  @@map("email_verifications")
+}
+
+model PasswordReset {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  token     String    @unique @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([token])
+  @@map("password_resets")
+}
+
+// ─── App & Build ────────────────────────────────────────────────────────
+
+model App {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId            String    @map("org_id") @db.Uuid
+  name             String    @db.VarChar(30)
+  bundleId         String    @map("bundle_id") @db.VarChar(100)
+  url              String    @db.VarChar(500)
+  shortDescription String?   @map("short_description") @db.VarChar(80)
+  longDescription  String?   @map("long_description") @db.VarChar(4000)
+  status           AppStatus @default(draft)
+
+  // Config stored as structured JSON with 7 sections:
+  // { identity, branding, display, links, security, noInternet, advanced }
+  configJson Json @default("{}") @map("config_json")
+
+  // Asset URLs (S3)
+  iconUrl          String? @map("icon_url")
+  splashBgUrl      String? @map("splash_bg_url")
+  splashLogoUrl    String? @map("splash_logo_url")
+  noInternetBgUrl  String? @map("no_internet_bg_url")
+  noInternetLogoUrl String? @map("no_internet_logo_url")
+  pageLoaderUrl    String? @map("page_loader_url")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  organisation   Organisation    @relation(fields: [orgId], references: [id])
+  builds         Build[]
+  revision       Revision?
+  addonPurchases AddonPurchase[]
+
+  @@unique([orgId, bundleId])
+  @@index([orgId])
+  @@map("apps")
+}
+
+model Build {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appId           String        @map("app_id") @db.Uuid
+  orgId           String        @map("org_id") @db.Uuid
+  status          BuildStatus   @default(pending)
+  queue           BuildQueue    @default(standard)
+  platform        BuildPlatform @default(android)
+  buildNumber     Int           @map("build_number")
+  easBuildId      String?       @map("eas_build_id")
+  configSnapshot  Json?         @map("config_snapshot")
+  addonsSnapshot  Json?         @map("addons_snapshot")
+  apkUrl          String?       @map("apk_url")
+  aabUrl          String?       @map("aab_url")
+  ipaUrl          String?       @map("ipa_url")
+  sourceZipUrl    String?       @map("source_zip_url")
+  errorMessage    String?       @map("error_message") @db.Text
+  errorCode       String?       @map("error_code") @db.VarChar(50)
+  retryCount      Int           @default(0) @map("retry_count")
+  revisionUsed    Boolean       @default(false) @map("revision_used")
+  buildDurationMs Int?          @map("build_duration_ms")
+  startedAt       DateTime?     @map("started_at") @db.Timestamptz
+  completedAt     DateTime?     @map("completed_at") @db.Timestamptz
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  app          App          @relation(fields: [appId], references: [id])
+  organisation Organisation @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@index([appId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("builds")
+}
+
+// ─── Addons ─────────────────────────────────────────────────────────────
+
+model AddonPurchase {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  appId       String   @map("app_id") @db.Uuid
+  addonSlug   String   @map("addon_slug") @db.VarChar(60)
+  // configJson is AES-256-GCM encrypted (iv:authTag:ciphertext base64)
+  configJson  String?  @map("config_json") @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  purchasedAt DateTime @default(now()) @map("purchased_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organisation Organisation @relation(fields: [orgId], references: [id])
+  app          App          @relation(fields: [appId], references: [id])
+
+  @@unique([appId, addonSlug])
+  @@index([orgId])
+  @@index([appId])
+  @@map("addon_purchases")
+}
+
+// ─── Revisions ──────────────────────────────────────────────────────────
+
+model Revision {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appId          String   @unique @map("app_id") @db.Uuid
+  usedCount      Int      @default(0) @map("used_count")
+  freeLimit      Int      @default(3) @map("free_limit")
+  extraPurchased Int      @default(0) @map("extra_purchased")
+  cycleStart     DateTime @default(now()) @map("cycle_start") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  app App @relation(fields: [appId], references: [id])
+
+  @@map("revisions")
+}
+
+// ─── Payments & Wallet ──────────────────────────────────────────────────
+
+model Payment {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String         @map("org_id") @db.Uuid
+  type        PaymentType
+  amount      Int            // in paise (INR smallest unit)
+  gstAmount   Int            @default(0) @map("gst_amount")
+  totalAmount Int            @map("total_amount")
+  currency    String         @default("INR") @db.VarChar(3)
+  gateway     PaymentGateway
+  gatewayRef  String?        @map("gateway_ref") @db.VarChar(100)
+  gatewayOrderId String?     @map("gateway_order_id") @db.VarChar(100)
+  status      PaymentStatus  @default(pending)
+  metadata    Json?          @default("{}")
+  invoiceUrl  String?        @map("invoice_url")
+  invoiceNumber String?      @map("invoice_number") @db.VarChar(20)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  organisation Organisation @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@index([gatewayRef])
+  @@index([gatewayOrderId])
+  @@index([status])
+  @@map("payments")
+}
+
+model MintWallet {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String   @unique @map("org_id") @db.Uuid
+  balance     Int      @default(0) // in paise
+  lastUpdated DateTime @default(now()) @map("last_updated") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organisation Organisation @relation(fields: [orgId], references: [id])
+
+  @@map("mint_wallets")
+}
+
+model WalletTransaction {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletId    String   @map("wallet_id") @db.Uuid
+  amount      Int      // positive = credit, negative = debit
+  balanceAfter Int     @map("balance_after")
+  description String   @db.VarChar(255)
+  referenceId String?  @map("reference_id") @db.VarChar(255) // e.g. "addon:slug:appId" or payment UUID
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([walletId])
+  @@index([createdAt])
+  @@map("wallet_transactions")
+}
+
+// ─── Agency ─────────────────────────────────────────────────────────────
+
+model Agency {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId        String     @unique @map("org_id") @db.Uuid
+  brandName    String     @map("brand_name") @db.VarChar(100)
+  brandColor   String?    @map("brand_color") @db.VarChar(7)
+  customDomain String?    @map("custom_domain") @db.VarChar(255)
+  subdomain    String?    @unique @db.VarChar(60)
+  logoUrl      String?    @map("logo_url")
+  plan         AgencyPlan @default(starter)
+  maxClients   Int        @default(10) @map("max_clients")
+  maxApps      Int        @default(15) @map("max_apps")
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  organisation Organisation   @relation("OrgAgency", fields: [orgId], references: [id])
+  clients      AgencyClient[]
+  managedOrgs  Organisation[] @relation("AgencyOrg")
+
+  @@map("agencies")
+}
+
+model AgencyClient {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agencyId    String             @map("agency_id") @db.Uuid
+  clientOrgId String             @map("client_org_id") @db.Uuid
+  status      AgencyClientStatus @default(invited)
+  inviteEmail String?            @map("invite_email") @db.VarChar(255)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  agency    Agency       @relation(fields: [agencyId], references: [id])
+  clientOrg Organisation @relation("ClientOrg", fields: [clientOrgId], references: [id])
+
+  @@unique([agencyId, clientOrgId])
+  @@index([agencyId])
+  @@map("agency_clients")
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────
+
+model NotificationLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String?  @map("org_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  channel   String   @db.VarChar(20) // email, sms
+  recipient String   @db.VarChar(255)
+  subject   String?  @db.VarChar(500)
+  template  String   @db.VarChar(60)
+  status    String   @default("queued") @db.VarChar(20) // queued, sent, failed
+  errorMsg  String?  @map("error_msg") @db.Text
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([orgId])
+  @@index([status])
+  @@map("notification_logs")
+}
